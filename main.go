@@ -5,23 +5,91 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 )
 
-// model de Contact 
+// modèle de Contact 
 type Contact struct {
 	ID    int
 	Name  string
 	Email string
 }
 
-// base de donnee
+// base de données
 var (
-	contacts = make(map[int]Contact) 
+	contacts = make(map[int]*Contact) // map[int]*Contact
 	nextID   = 1
 )
+
+//Constructeur : NewContact 
+func NewContact(name, email string) (*Contact, error) {
+	name = strings.TrimSpace(name)
+	email = strings.TrimSpace(email)
+
+	if name == "" {
+		return nil, fmt.Errorf("nom vide")
+	}
+	if !isValidEmail(email) {
+		return nil, fmt.Errorf("email invalide")
+	}
+
+	return &Contact{
+		Name:  name,
+		Email: email,
+	}, nil
+}
+
+var emailRe = regexp.MustCompile(`^[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}$`)
+
+func isValidEmail(s string) bool {
+	return emailRe.MatchString(s)
+}
+
+//Méthodes sur Contact 
+
+// Add 
+func (c *Contact) Add() (int, error) {
+	if c.ID != 0 {
+		return -1, fmt.Errorf("ce contact a déjà un ID (%d), utilisez Update", c.ID)
+	}
+	c.ID = nextID
+	nextID++
+	if _, exists := contacts[c.ID]; exists {
+		return -1, fmt.Errorf("l'ID %d existe déjà", c.ID)
+	}
+	contacts[c.ID] = c
+	return c.ID, nil
+}
+
+// Delete 
+func (c *Contact) Delete() bool {
+	if c.ID == 0 {
+		return false
+	}
+	if _, ok := contacts[c.ID]; ok {
+		delete(contacts, c.ID)
+		return true
+	}
+	return false
+}
+
+// Update 
+func (c *Contact) Update(newName, newEmail string) error {
+	if s := strings.TrimSpace(newName); s != "" {
+		c.Name = s
+	}
+	if s := strings.TrimSpace(newEmail); s != "" {
+		if !isValidEmail(s) {
+			return fmt.Errorf("email invalide")
+		}
+		c.Email = s
+	}
+	contacts[c.ID] = c
+	return nil
+}
 
 func main() {
 	// add contact grace a flag 
@@ -31,14 +99,19 @@ func main() {
 	flag.Parse()
 
 	if *addFlag {
-    if strings.TrimSpace(*nameFlag) == "" || strings.TrimSpace(*emailFlag) == "" {
-        fmt.Println("Erreur: utilisez -name et -email avec -add, ex.:")
-        fmt.Println(`  go run . -add -name "Anna" -email "anna@gmail.com"`)
-    } else {
-        id := addContact(strings.TrimSpace(*nameFlag), strings.TrimSpace(*emailFlag))
-        fmt.Printf("Contact '%s' ajouté avec l'ID %d.\n", *nameFlag, id)
-    }
-}
+		c, err := NewContact(*nameFlag, *emailFlag)
+		if err != nil {
+			fmt.Println("Erreur:", err)
+			fmt.Println(`Exemple: go run . -add -name "Anna" -email "anna@gmail.com"`)
+		} else {
+			id, err := c.Add()
+			if err != nil {
+				fmt.Println("Erreur:", err)
+			} else {
+				fmt.Printf("Contact '%s' ajouté avec l'ID %d.\n", c.Name, id)
+			}
+		}
+	}
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -51,13 +124,23 @@ func main() {
 		}
 
 		switch choice {
-		case 1: // add
+		case 1: // ajouter
 			name, _ := readLine(reader, "Entrez le nom du contact : ")
 			email, _ := readLine(reader, "Entrez l'email du contact : ")
-			id := addContact(strings.TrimSpace(name), strings.TrimSpace(email))
-			fmt.Printf("Contact '%s' ajouté avec l'ID %d.\n\n", strings.TrimSpace(name), id)
+			c, err := NewContact(name, email)
+			if err != nil {
+				fmt.Println("Erreur:", err)
+				fmt.Println()
+				continue
+			}
+			id, err := c.Add()
+			if err != nil {
+				fmt.Println("Erreur:", err)
+			} else {
+				fmt.Printf("Contact '%s' ajouté avec l'ID %d.\n\n", c.Name, id)
+			}
 
-		case 2: // liste
+		case 2: // lister
 			listContacts()
 
 		case 3: // supprimer
@@ -67,25 +150,35 @@ func main() {
 				fmt.Println("ID invalide.")
 				continue
 			}
-			if deleteContact(id) {
+			c := contacts[id]
+			if c == nil {
+				fmt.Println("Aucun contact avec cet ID.\n")
+				continue
+			}
+			if c.Delete() {
 				fmt.Println("Contact supprimé.\n")
 			} else {
-				fmt.Println("Aucun contact avec cet ID.\n")
+				fmt.Println("Suppression échouée.\n")
 			}
 
-		case 4: // update
+		case 4: // mettre à jour
 			idStr, _ := readLine(reader, "Entrez l'ID du contact à mettre à jour : ")
 			id, err := strconv.Atoi(strings.TrimSpace(idStr))
 			if err != nil {
 				fmt.Println("ID invalide.")
 				continue
 			}
+			c := contacts[id]
+			if c == nil {
+				fmt.Println("Aucun contact avec cet ID.\n")
+				continue
+			}
 			name, _ := readLine(reader, "Nouveau nom (laisser vide pour ne pas changer) : ")
 			email, _ := readLine(reader, "Nouvel email (laisser vide pour ne pas changer) : ")
-			if updateContact(id, strings.TrimSpace(name), strings.TrimSpace(email)) {
-				fmt.Println("Contact mis à jour.\n")
+			if err := c.Update(name, email); err != nil {
+				fmt.Println("Erreur:", err)
 			} else {
-				fmt.Println("Aucun contact avec cet ID.\n")
+				fmt.Println("Contact mis à jour.\n")
 			}
 
 		case 5: // quitter
@@ -118,24 +211,9 @@ func readLine(reader *bufio.Reader, prompt string) (string, error) {
 	return strings.TrimRight(text, "\r\n"), nil
 }
 
-func addContact(name, email string) int {
-	if name == "" || email == "" {
-		fmt.Println("Nom et email ne doivent pas être vides.")
-		return -1
-	}
-	id := nextID
-	contacts[id] = Contact{
-		ID:    id,
-		Name:  name,
-		Email: email,
-	}
-	nextID++
-	return id
-}
-
 func listContacts() {
+	fmt.Println("\n--- Liste des Contacts ---")
 	if len(contacts) == 0 {
-		fmt.Println("\n--- Liste des Contacts ---")
 		fmt.Println("(aucun contact)\n")
 		return
 	}
@@ -146,33 +224,9 @@ func listContacts() {
 	}
 	sort.Ints(ids)
 
-	fmt.Println("\n--- Liste des Contacts ---")
 	for _, id := range ids {
 		c := contacts[id]
 		fmt.Printf("ID: %d, Nom: %s, Email: %s\n", c.ID, c.Name, c.Email)
 	}
 	fmt.Println()
-}
-
-func deleteContact(id int) bool {
-	if _, ok := contacts[id]; ok {
-		delete(contacts, id)
-		return true
-	}
-	return false
-}
-
-func updateContact(id int, newName, newEmail string) bool {
-	c, ok := contacts[id]
-	if !ok {
-		return false
-	}
-	if newName != "" {
-		c.Name = newName
-	}
-	if newEmail != "" {
-		c.Email = newEmail
-	}
-	contacts[id] = c
-	return true
 }
