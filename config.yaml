@@ -1,0 +1,7 @@
+storage:
+  type: "gorm"
+  path: "contacts.db"
+
+# storage:
+#   type: "json"
+#   path: "contacts.json"

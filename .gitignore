@@ -1,0 +1,4 @@
+.gocache/
+bin/
+contacts.db
+contacts.json
