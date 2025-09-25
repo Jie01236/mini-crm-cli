@@ -16,13 +16,19 @@ Le fichier `config.yaml` pilote le stockage utilisé :
 
 ```yaml
 storage:
-  type: "json"   # valeurs possibles: memory, json, gorm
-  path: "contacts.json"  # requis pour json, optionnel pour gorm (contacts.db par défaut)
+  type: "gorm"   # valeurs possibles: memory, json, gorm
+  path: "contacts.db"  # optionnel pour gorm (contacts.db par défaut), requis pour json
+
+# storage:
+#   type: "json"
+#   path: "contacts.json"
 ```
 
+L'exemple ci-dessus active SQLite via GORM et laisse en commentaire une configuration JSON que vous pouvez réactiver en retirant les `#`. Résumé des modes :
+
 - `memory` : stockage éphémère pratique pour les tests.
-- `json` : persistance dans un fichier JSON lisible.
-- `gorm` : persistance dans une base SQLite (`contacts.db` par défaut).
+- `json` : persistance dans un fichier JSON lisible (il faut fournir `path`).
+- `gorm` : persistance dans une base SQLite (`contacts.db` par défaut, ou toute valeur passée dans `path`).
 
 ## Utilisation
 
